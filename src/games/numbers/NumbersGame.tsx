@@ -3,72 +3,83 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Volume2, ArrowLeft, Play, Settings } from 'lucide-react';
 import { audioManager } from '../../shared/services/audioManager';
-import { ALPHABET, COLORS } from '../../shared/constants';
+import { COLORS } from '../../shared/constants';
 
-interface AlphabetGameProps {
+interface NumbersGameProps {
   onExit: () => void;
   onOpenSettings: () => void;
+  range: { start: number; end: number };
 }
 
-export function AlphabetGame({ onExit, onOpenSettings }: AlphabetGameProps) {
+export function NumbersGame({ onExit, onOpenSettings, range }: NumbersGameProps) {
   const [gameState, setGameState] = useState<'HOME' | 'PLAYING'>('HOME');
-  const [targetLetter, setTargetLetter] = useState('');
-  const [gridLetters, setGridLetters] = useState<string[]>([]);
+  const [targetNumber, setTargetNumber] = useState<number | null>(null);
+  const [gridNumbers, setGridNumbers] = useState<number[]>([]);
   const [feedback, setFeedback] = useState<{ [key: number]: 'correct' | 'wrong' | null }>({});
   const [showSuccess, setShowSuccess] = useState(false);
 
-  const playAudio = useCallback((type: 'letter' | 'success' | 'wrong', letter?: string) => {
-    if (type === 'letter' && letter) {
-      audioManager.playLetter(letter);
+  const availableNumbers = useMemo(() => {
+    const nums = [];
+    for (let i = range.start; i <= range.end; i++) {
+      nums.push(i);
+    }
+    return nums;
+  }, [range]);
+
+  const playAudio = useCallback((type: 'number' | 'success' | 'wrong', num?: number) => {
+    if (type === 'number' && num !== undefined) {
+      audioManager.playNumber(num);
     } else if (type === 'success') {
       audioManager.playPraise();
-    } else if (type === 'wrong' && letter) {
-      audioManager.playWord(`Toto je písmenko ${letter}. Skús to znova.`);
-      audioManager.playFeedback(letter);
+    } else if (type === 'wrong' && num !== undefined) {
+      // For numbers, we can just say the number they picked
+      audioManager.playWord(`Vybral si číslo ${num}. Skús to znova.`);
     }
   }, []);
 
   const startNewRound = useCallback(() => {
-    let target = ALPHABET[Math.floor(Math.random() * ALPHABET.length)];
-    if (targetLetter && ALPHABET.length > 1) {
-      while (target === targetLetter) {
-        target = ALPHABET[Math.floor(Math.random() * ALPHABET.length)];
+    if (availableNumbers.length === 0) return;
+
+    let target = availableNumbers[Math.floor(Math.random() * availableNumbers.length)];
+    if (targetNumber !== null && availableNumbers.length > 1) {
+      while (target === targetNumber) {
+        target = availableNumbers[Math.floor(Math.random() * availableNumbers.length)];
       }
     }
     
-    const others = ALPHABET.filter(l => l !== target).sort(() => 0.5 - Math.random()).slice(0, 7);
+    const others = availableNumbers.filter(n => n !== target).sort(() => 0.5 - Math.random()).slice(0, 3);
     const grid = [...others, target].sort(() => 0.5 - Math.random());
     
-    setTargetLetter(target);
-    setGridLetters(grid);
+    setTargetNumber(target);
+    setGridNumbers(grid);
     setFeedback({});
     setShowSuccess(false);
-  }, [targetLetter]);
+  }, [targetNumber, availableNumbers]);
 
   useEffect(() => {
-    if (gameState === 'PLAYING' && targetLetter) {
+    if (gameState === 'PLAYING' && targetNumber !== null) {
       // Small delay to ensure browser speech engine is ready after user interaction
       const timer = setTimeout(() => {
-        playAudio('letter', targetLetter);
+        playAudio('number', targetNumber);
       }, 100);
       return () => clearTimeout(timer);
     }
-  }, [gameState, targetLetter, playAudio]);
+  }, [gameState, targetNumber, playAudio]);
 
   useEffect(() => {
-    if (gameState === 'PLAYING' && !targetLetter) {
+    if (gameState === 'PLAYING' && targetNumber === null) {
       startNewRound();
     }
-  }, [gameState, targetLetter, startNewRound]);
+  }, [gameState, targetNumber, startNewRound]);
 
-  const handleLetterClick = (letter: string, index: number) => {
+  const handleNumberClick = (num: number, index: number) => {
     if (showSuccess) return;
     
-    if (letter === targetLetter) {
+    if (num === targetNumber) {
       setFeedback(prev => ({ ...prev, [index]: 'correct' }));
       playAudio('success');
       setTimeout(() => setShowSuccess(true), 500);
@@ -77,7 +88,7 @@ export function AlphabetGame({ onExit, onOpenSettings }: AlphabetGameProps) {
       }, 3000);
     } else {
       setFeedback(prev => ({ ...prev, [index]: 'wrong' }));
-      playAudio('wrong', letter);
+      playAudio('wrong', num);
       setTimeout(() => {
         setFeedback(prev => ({ ...prev, [index]: null }));
       }, 500);
@@ -106,7 +117,7 @@ export function AlphabetGame({ onExit, onOpenSettings }: AlphabetGameProps) {
         <div className="flex-1 flex flex-col items-center justify-center p-4 py-8 sm:py-12">
           <div className="mb-8 sm:mb-12 md:mb-20 text-center w-full px-4 py-4 shrink-0">
             <h1 className="text-5xl sm:text-7xl md:text-[120px] font-black flex flex-wrap justify-center gap-2 sm:gap-4 select-none leading-tight">
-              {"ABECEDA".split('').map((char, i) => (
+              {"ČÍSLA".split('').map((char, i) => (
                 <span 
                   key={i} 
                   className={`${COLORS[i % COLORS.length]} inline-block py-2`}
@@ -119,20 +130,21 @@ export function AlphabetGame({ onExit, onOpenSettings }: AlphabetGameProps) {
                 </span>
               ))}
             </h1>
+            <p className="text-2xl sm:text-3xl font-bold opacity-50 mt-4">Rozsah: {range.start} - {range.end}</p>
           </div>
 
           <motion.button 
             whileHover={{ scale: 1.05, y: -5 }}
             whileTap={{ scale: 0.95, y: 5 }}
             onClick={() => setGameState('PLAYING')}
-            className="w-32 h-32 sm:w-48 md:w-60 sm:h-48 md:h-60 bg-success rounded-full shadow-block flex items-center justify-center text-white transition-all shrink-0"
+            className="w-32 h-32 sm:w-48 md:w-60 sm:h-48 md:h-60 bg-accent-blue rounded-full shadow-block flex items-center justify-center text-white transition-all shrink-0"
           >
             <Play size={48} className="sm:w-20 sm:h-20 md:w-[100px] md:h-[100px] ml-2 sm:ml-4" fill="currentColor" />
           </motion.button>
         </div>
         
-        <div className="absolute top-1/4 left-4 sm:left-10 w-20 h-20 sm:w-32 sm:h-32 rounded-3xl bg-accent-blue opacity-30 -rotate-12 blur-sm pointer-events-none" />
-        <div className="absolute bottom-10 right-4 sm:bottom-20 sm:right-20 w-32 h-32 sm:w-48 sm:h-48 rounded-full bg-primary opacity-20 translate-y-10 blur-md pointer-events-none" />
+        <div className="absolute top-1/4 left-4 sm:left-10 w-20 h-20 sm:w-32 sm:h-32 rounded-3xl bg-primary opacity-30 -rotate-12 blur-sm pointer-events-none" />
+        <div className="absolute bottom-10 right-4 sm:bottom-20 sm:right-20 w-32 h-32 sm:w-48 sm:h-48 rounded-full bg-success opacity-20 translate-y-10 blur-md pointer-events-none" />
       </div>
     );
   }
@@ -149,26 +161,26 @@ export function AlphabetGame({ onExit, onOpenSettings }: AlphabetGameProps) {
       <div className="flex flex-col items-center gap-4 sm:gap-8 mb-8 sm:mb-12">
         <motion.button 
           whileTap={{ scale: 0.9 }}
-          onClick={() => playAudio('letter', targetLetter)}
+          onClick={() => targetNumber !== null && playAudio('number', targetNumber)}
           className="w-16 h-16 sm:w-20 sm:h-20 bg-white rounded-full shadow-block flex items-center justify-center text-text-main"
         >
           <Volume2 size={32} className="sm:w-10 sm:h-10" />
         </motion.button>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-8 w-full max-w-5xl px-4">
-        {gridLetters.map((letter, i) => (
+      <div className="grid grid-cols-2 gap-4 sm:gap-8 w-full max-w-3xl px-4">
+        {gridNumbers.map((num, i) => (
           <motion.button
             key={i}
-            onClick={() => handleLetterClick(letter, i)}
+            onClick={() => handleNumberClick(num, i)}
             animate={feedback[i] === 'wrong' ? { x: [-10, 10, -10, 10, 0] } : {}}
             className={`
-              w-full aspect-[4/5] rounded-[24px] sm:rounded-[32px] flex items-center justify-center text-6xl sm:text-[120px] font-bold font-spline transition-all
+              w-full aspect-square rounded-[24px] sm:rounded-[32px] flex items-center justify-center text-6xl sm:text-[120px] font-bold font-spline transition-all
               ${feedback[i] === 'correct' ? 'bg-success text-primary shadow-block-correct -translate-y-1' : 'bg-white text-text-main shadow-block'}
               ${feedback[i] === 'wrong' ? 'opacity-50 shadow-block-pressed scale-95' : 'active:translate-y-2 active:shadow-block-pressed'}
             `}
           >
-            {letter}
+            {num}
           </motion.button>
         ))}
       </div>
