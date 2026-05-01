@@ -1,3 +1,30 @@
+# Revert Word Items Codegen Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Remove word-items code generation pipeline and inline 26 words directly into locale files.
+
+**Architecture:** Move WORD_ITEMS from generated file into `src/shared/locales/sk.ts` (and keep empty in `cs.ts`). Delete CSV, script, and generated file. Remove codegen script from package.json.
+
+**Tech Stack:** TypeScript, no build changes required.
+
+---
+
+## Task 1: Update src/shared/locales/sk.ts
+
+**Files:**
+- Modify: `src/shared/locales/sk.ts:1-4` (remove import of generated file)
+
+- [ ] **Step 1: Replace import line**
+
+Current line 2:
+```typescript
+import { WORD_ITEMS } from '../wordItems.generated';
+```
+
+Replace with inline WORD_ITEMS array. Edit the file to add the array after LETTER_ITEMS and before NUMBER_ITEMS. The complete updated section (lines 1-95 with new WORD_ITEMS):
+
+```typescript
 import { Letter, NumberItem, AudioPhrase, AudioPhraseKey, PraiseEntry, Word } from '../types';
 
 export const LETTER_ITEMS: Letter[] = [
@@ -109,3 +136,208 @@ export const PRAISE_ENTRIES: PraiseEntry[] = [
   { emoji: '🌈', text: 'Úžasné!',       audioKey: 'uzasne' },
   { emoji: '🎊', text: 'Paráda!',       audioKey: 'parada' },
 ];
+```
+
+- [ ] **Step 2: Verify file and no import of generated file**
+
+Run: `grep -n "wordItems.generated" src/shared/locales/sk.ts`
+Expected: No output (import removed)
+
+- [ ] **Step 3: Commit this task**
+
+```bash
+git add src/shared/locales/sk.ts
+git commit -m "feat: inline 26 words into sk.ts locale"
+```
+
+---
+
+## Task 2: Verify cs.ts keeps empty WORD_ITEMS
+
+**Files:**
+- Verify: `src/shared/locales/cs.ts:12` (WORD_ITEMS should stay empty)
+
+- [ ] **Step 1: Check current state**
+
+Run: `grep -A 1 "export const WORD_ITEMS" src/shared/locales/cs.ts`
+Expected output:
+```
+export const WORD_ITEMS: Word[] = [];
+```
+
+No changes needed — cs.ts already has empty WORD_ITEMS as a placeholder for future Czech translation.
+
+---
+
+## Task 3: Delete data/words.csv
+
+**Files:**
+- Delete: `data/words.csv`
+
+- [ ] **Step 1: Remove file**
+
+Run: `rm data/words.csv`
+
+- [ ] **Step 2: Verify deletion**
+
+Run: `test -f data/words.csv && echo "FAILED" || echo "DELETED"`
+Expected: `DELETED`
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add -A
+git commit -m "chore: remove words.csv (now inlined in locales)"
+```
+
+---
+
+## Task 4: Delete scripts/generate-word-items.ts
+
+**Files:**
+- Delete: `scripts/generate-word-items.ts`
+
+- [ ] **Step 1: Remove file**
+
+Run: `rm scripts/generate-word-items.ts`
+
+- [ ] **Step 2: Verify deletion**
+
+Run: `test -f scripts/generate-word-items.ts && echo "FAILED" || echo "DELETED"`
+Expected: `DELETED`
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add -A
+git commit -m "chore: remove word codegen script"
+```
+
+---
+
+## Task 5: Delete src/shared/wordItems.generated.ts
+
+**Files:**
+- Delete: `src/shared/wordItems.generated.ts`
+
+- [ ] **Step 1: Remove file**
+
+Run: `rm src/shared/wordItems.generated.ts`
+
+- [ ] **Step 2: Verify deletion**
+
+Run: `test -f src/shared/wordItems.generated.ts && echo "FAILED" || echo "DELETED"`
+Expected: `DELETED`
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add -A
+git commit -m "chore: remove generated word items file"
+```
+
+---
+
+## Task 6: Remove codegen from package.json
+
+**Files:**
+- Modify: `package.json:13`
+
+- [ ] **Step 1: Remove codegen script**
+
+Current line 13:
+```json
+    "codegen": "tsx scripts/generate-word-items.ts"
+```
+
+Delete this line entirely. Updated scripts section should be:
+```json
+  "scripts": {
+    "dev": "vite --port=3000 --host=0.0.0.0",
+    "build": "vite build",
+    "preview": "vite preview",
+    "clean": "rm -rf dist",
+    "lint": "tsc --noEmit && node_modules/.bin/eslint src --ext ts,tsx",
+    "test:audio": "npx tsx public/audio/_review/check_audio.ts"
+  },
+```
+
+- [ ] **Step 2: Verify codegen is removed**
+
+Run: `grep "codegen" package.json`
+Expected: No output
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add package.json
+git commit -m "chore: remove codegen script from package.json"
+```
+
+---
+
+## Task 7: Build and test app
+
+**Files:**
+- Verify: App builds successfully
+
+- [ ] **Step 1: Install dependencies (if needed)**
+
+Run: `npm install`
+Expected: No errors (dependencies already installed)
+
+- [ ] **Step 2: Run linter**
+
+Run: `npm run lint`
+Expected: No TypeScript errors or ESLint violations
+
+- [ ] **Step 3: Build app**
+
+Run: `npm run build`
+Expected: Success, dist/ folder created with no errors
+
+- [ ] **Step 4: Start dev server**
+
+Run: `npm run dev`
+Expected: Dev server starts on port 3000. App loads without errors in browser.
+
+- [ ] **Step 5: Verify words game loads**
+
+Open browser to `http://localhost:3000` (or `http://<IP>:3000` from network)
+Navigate to `/words` game in the app.
+Expected: Words game loads, displays 26 word cards without errors, audio plays when prompted.
+
+- [ ] **Step 6: Verify syllables game loads**
+
+Navigate to `/syllables` game.
+Expected: Syllables game loads correctly (uses derived syllables from WORD_ITEMS), no errors in console.
+
+- [ ] **Step 7: Stop dev server**
+
+Press `Ctrl+C` in the terminal running the dev server.
+
+---
+
+## Task 8: Final commit
+
+**Files:**
+- Verify: All changes committed
+
+- [ ] **Step 1: Check git status**
+
+Run: `git status`
+Expected: Clean working tree (nothing to commit)
+
+- [ ] **Step 2: View commit log**
+
+Run: `git log --oneline -8`
+Expected: Shows 5 commits from this task:
+```
+<hash> chore: remove codegen script from package.json
+<hash> chore: remove generated word items file
+<hash> chore: remove word codegen script
+<hash> chore: remove words.csv (now inlined in locales)
+<hash> feat: inline 26 words into sk.ts locale
+```
+
+Task complete. Words list is now fully inlined in locale files.
